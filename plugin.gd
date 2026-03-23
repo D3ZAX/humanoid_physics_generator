@@ -11,7 +11,7 @@ func _exit_tree() -> void:
 	remove_tool_menu_item("Generate Humanoid Physics")
 
 func _ensure_project_setting() -> void:
-	var key := "humanoid_physics_generator/use_symmetric_shapes"
+	var key := "plugins/humanoid_physics_generator/use_symmetric_shapes"
 	if not ProjectSettings.has_setting(key):
 		ProjectSettings.set_setting(key, true)
 	ProjectSettings.add_property_info({
@@ -21,6 +21,8 @@ func _ensure_project_setting() -> void:
 		"hint_string": "",
 		"usage": PROPERTY_USAGE_DEFAULT
 	})
+	ProjectSettings.set_as_basic(key, true)
+	ProjectSettings.set_initial_value(key, true)
 
 func _on_generate_pressed() -> void:
 	var editor_selection := get_editor_interface().get_selection()
