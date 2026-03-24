@@ -62,7 +62,7 @@ const TORSO_BONES := [
 	"UpperChest"
 ]
 
-static func generate_for_skeleton(skeleton: Skeleton3D) -> void:
+static func generate_for_skeleton(skeleton: Skeleton3D, parent: Node3D) -> void:
 	if skeleton == null:
 		return
 
@@ -98,6 +98,7 @@ static func generate_for_skeleton(skeleton: Skeleton3D) -> void:
 
 		var shape_used := _create_physical_bone_and_collider(
 			skeleton,
+			parent,
 			bone_name,
 			humanoid_bone_indices[bone_name],
 			bone_aabbs,
@@ -215,7 +216,7 @@ static func _add_point_to_bone_aabb(bone_aabbs: Dictionary, bone_idx: int, point
 	var aabb: AABB = bone_aabbs[bone_idx]
 	bone_aabbs[bone_idx] = aabb.expand(point)
 
-static func _create_physical_bone_and_collider(skeleton: Skeleton3D, bone_name: String, bone_idx: int, bone_aabbs: Dictionary, override_shape: Shape3D) -> Shape3D:
+static func _create_physical_bone_and_collider(skeleton: Skeleton3D, parent: Node3D, bone_name: String, bone_idx: int, bone_aabbs: Dictionary, override_shape: Shape3D) -> Shape3D:
 	var pb := PhysicalBone3D.new()
 	pb.name = "PB_%s" % bone_name
 	pb.set_meta("humanoid_physics_generator", true)
@@ -225,8 +226,8 @@ static func _create_physical_bone_and_collider(skeleton: Skeleton3D, bone_name: 
 		pb.set("bone_name", bone_name)
 	pb.transform = skeleton.get_bone_global_pose(bone_idx)
 	
-	skeleton.add_child(pb)
-	pb.owner = skeleton.owner
+	parent.add_child(pb)
+	pb.owner = parent.owner
 
 	var collider := CollisionShape3D.new()
 	pb.add_child(collider)

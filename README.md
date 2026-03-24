@@ -19,7 +19,7 @@ A Godot 4 editor plugin that generates humanoid `PhysicalBone3D` nodes and colli
 
 ## Usage
 
-1. Select a `Skeleton3D` node in the current scene.
+1. Select a `Skeleton3D` or `PhysicalBoneSimulator3D` node in the current scene.
 2. Run `Project > Tools > Generate Humanoid Physics`.
 
 The plugin will add `PhysicalBone3D` children under the selected skeleton and create colliders according to the rules below.

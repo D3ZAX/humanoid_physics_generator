@@ -28,12 +28,23 @@ func _on_generate_pressed() -> void:
 	var editor_selection := get_editor_interface().get_selection()
 	var selected_nodes := editor_selection.get_selected_nodes()
 	var skeleton: Skeleton3D = null
+	var parent: Node3D = null
 	for node in selected_nodes:
 		if node is Skeleton3D:
+			parent = node
 			skeleton = node
 			break
+		elif node is PhysicalBoneSimulator3D:
+			parent = node
+			var ske = node.get_parent()
+			if ske is Skeleton3D:
+				skeleton = ske				
+			else:
+				push_warning("PhysicalBoneSimulator3D node must be a child of Skeleton3D node.")
+				return
+			break
 	if skeleton == null:
-		push_warning("Select a Skeleton3D node in the current scene first.")
+		push_warning("Select a Skeleton3D node or PhysicalBoneSimulator3D node in the current scene first.")
 		return
 
-	Generator.generate_for_skeleton(skeleton)
+	Generator.generate_for_skeleton(skeleton, parent)
