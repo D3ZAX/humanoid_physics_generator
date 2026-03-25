@@ -26,6 +26,16 @@ func _ensure_project_setting() -> void:
 	ProjectSettings.set_initial_value(key, true)
 
 func _ensure_rotation_limit_settings() -> void:
+	var sym_key := Generator.ROT_LIMITS_SYMMETRY_KEY
+	_ensure_setting(sym_key, 1, TYPE_INT, PROPERTY_HINT_ENUM, "None,RightFromLeft,LeftFromRight")
+	ProjectSettings.set_as_basic(sym_key, true)
+	ProjectSettings.set_initial_value(sym_key, 1)
+
+	var damp_key := Generator.APPLY_DAMPING_SETTING_KEY
+	_ensure_setting(damp_key, false, TYPE_BOOL)
+	ProjectSettings.set_as_basic(damp_key, true)
+	ProjectSettings.set_initial_value(damp_key, false)
+	
 	var defaults: Dictionary = Generator.get_default_rotation_limits()
 	for bone_name in defaults.keys():
 		var d: Dictionary = defaults[bone_name]
@@ -42,11 +52,6 @@ func _ensure_rotation_limit_settings() -> void:
 		_ensure_setting("%s/%s/linear_damp" % [Generator.ROT_LIMITS_PREFIX, bone_name], d["linear_damp"], TYPE_FLOAT)
 		_ensure_setting("%s/%s/angular_damp" % [Generator.ROT_LIMITS_PREFIX, bone_name], d["angular_damp"], TYPE_FLOAT)
 
-	var sym_key := Generator.ROT_LIMITS_SYMMETRY_KEY
-	_ensure_setting(sym_key, 0, TYPE_INT, PROPERTY_HINT_ENUM, "None,RightFromLeft,LeftFromRight")
-	ProjectSettings.set_as_basic(sym_key, true)
-	ProjectSettings.set_initial_value(sym_key, 1)
-
 func _ensure_setting(path: String, value, type: int, hint: int = PROPERTY_HINT_NONE, hint_string: String = "") -> void:
 	if not ProjectSettings.has_setting(path):
 		ProjectSettings.set_setting(path, value)
@@ -57,6 +62,7 @@ func _ensure_setting(path: String, value, type: int, hint: int = PROPERTY_HINT_N
 		"hint_string": hint_string,
 		"usage": PROPERTY_USAGE_DEFAULT
 	})
+	ProjectSettings.set_initial_value(path, value)
 
 func _on_generate_pressed() -> void:
 	var editor_selection := get_editor_interface().get_selection()

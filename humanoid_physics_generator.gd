@@ -56,8 +56,9 @@ const SHOULDER_BONES := [
 ]
 
 const SYMMETRIC_SETTING_KEY := "plugins/humanoid_physics_generator/use_symmetric_shapes"
-const ROT_LIMITS_PREFIX := "plugins/humanoid_physics_generator/rot_limits"
+const APPLY_DAMPING_SETTING_KEY := "plugins/humanoid_physics_generator/apply_limit_damping"
 const ROT_LIMITS_SYMMETRY_KEY := "plugins/humanoid_physics_generator/rot_limits_symmetry"
+const ROT_LIMITS_PREFIX := "plugins/humanoid_physics_generator/rot_limits"
 
 const TORSO_BONES := [
 	"Hips",
@@ -87,6 +88,7 @@ static func generate_for_skeleton(skeleton: Skeleton3D, parent: Node3D) -> void:
 	var use_symmetric := _is_symmetric_shapes_enabled()
 	var shared_shapes: Dictionary = {}
 	var existing_pbs := _get_existing_physical_bones_by_name(parent)
+	_ensure_ignore_adjacent_node(parent)
 
 	for bone_name in HUMANOID_BONES:
 		if _is_finger_or_toe_name(bone_name):
@@ -118,7 +120,6 @@ static func generate_for_skeleton(skeleton: Skeleton3D, parent: Node3D) -> void:
 		if use_symmetric and bone_name.begins_with("Left") and shape_used != null:
 			shared_shapes[bone_name] = shape_used
 
-	_ensure_ignore_adjacent_node(parent)
 
 static func _cleanup_previous(skeleton: Skeleton3D) -> void:
 	for child in skeleton.get_children():
@@ -136,6 +137,11 @@ static func _is_symmetric_shapes_enabled() -> bool:
 	if ProjectSettings.has_setting(SYMMETRIC_SETTING_KEY):
 		return bool(ProjectSettings.get_setting(SYMMETRIC_SETTING_KEY))
 	return true
+
+static func _is_apply_damping_enabled() -> bool:
+	if ProjectSettings.has_setting(APPLY_DAMPING_SETTING_KEY):
+		return bool(ProjectSettings.get_setting(APPLY_DAMPING_SETTING_KEY))
+	return false
 
 static func _mirror_bone_name(bone_name: String) -> String:
 	if bone_name.begins_with("Right"):
@@ -209,7 +215,8 @@ static func _apply_6dof_constraints(pb: PhysicalBone3D, bone_name: String, skele
 	_set_joint_limit_softness(pb, "x", float(limits["x_softness"]))
 	_set_joint_limit_softness(pb, "y", float(limits["y_softness"]))
 	_set_joint_limit_softness(pb, "z", float(limits["z_softness"]))
-	_set_joint_damping(pb, float(limits["linear_damp"]), float(limits["angular_damp"]))
+	if _is_apply_damping_enabled():
+		_set_joint_damping(pb, float(limits["linear_damp"]), float(limits["angular_damp"]))
 
 static func _set_joint_type_6dof(pb: PhysicalBone3D) -> void:
 	if pb.has_method("set_joint_type"):
@@ -259,7 +266,8 @@ static func _set_joint_damping(pb: PhysicalBone3D, linear_damp: float, angular_d
 
 static func _set_joint_limit_softness(pb: PhysicalBone3D, axis: String, softness: float) -> void:
 	var base := "joint_constraints/%s" % axis
-	_set_if_exists(pb, "%s/angular_limit_softness" % base, softness)
+	if _is_apply_damping_enabled():
+		_set_if_exists(pb, "%s/angular_limit_softness" % base, softness)
 
 static func _set_joint_limit_axis(pb: PhysicalBone3D, axis: String, lower: float, upper: float, enabled: bool) -> void:
 	var base := "joint_constraints/%s" % axis
@@ -348,7 +356,7 @@ static func get_default_rotation_limits() -> Dictionary:
 			"linear_damp": 0.01, "angular_damp": 0.0, "enabled": false
 		},
 		"Spine": {
-			"x_lower": -60.0, "x_upper": 15.0,
+			"x_lower": -30.0, "x_upper": 15.0,
 			"y_lower": -15.0, "y_upper": 15.0,
 			"z_lower": -15.0, "z_upper": 15.0,
 			"x_softness": 0.5, "y_softness": 0.5, "z_softness": 0.5,
@@ -404,14 +412,14 @@ static func get_default_rotation_limits() -> Dictionary:
 			"linear_damp": 0.1, "angular_damp": 0.1, "enabled": true
 		},
 		"Hand": {
-			"x_lower": -15.0, "x_upper": 15.0,
+			"x_lower": -20.0, "x_upper": 20.0,
 			"y_lower": -20.0, "y_upper": 20.0,
-			"z_lower": -20.0, "z_upper": 20.0,
+			"z_lower": -15.0, "z_upper": 15.0,
 			"x_softness": 0.8, "y_softness": 0.8, "z_softness": 0.8,
 			"linear_damp": 0.0, "angular_damp": 0.0, "enabled": true
 		},
 		"UpperLeg": {
-			"x_lower": -20.0, "x_upper": 90.0,
+			"x_lower": -90.0, "x_upper": 20.0,
 			"y_lower": -20.0, "y_upper": 20.0,
 			"z_lower": -20.0, "z_upper": 20.0,
 			"x_softness": 0.8, "y_softness": 0.8, "z_softness": 0.8,
