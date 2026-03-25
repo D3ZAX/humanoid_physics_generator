@@ -1,6 +1,8 @@
 @tool
 extends Node
 
+const IGNORE_SCRIPT_PATH := "res://addons/humanoid_physics_generator/humanoid_physics_ignore_adjacent.gd"
+
 const HUMANOID_BONES := [
 	"Hips",
 	"Spine",
@@ -53,7 +55,9 @@ const SHOULDER_BONES := [
 	"RightShoulder"
 ]
 
-const SYMMETRIC_SETTING_KEY := "humanoid_physics_generator/use_symmetric_shapes"
+const SYMMETRIC_SETTING_KEY := "plugins/humanoid_physics_generator/use_symmetric_shapes"
+const ROT_LIMITS_PREFIX := "plugins/humanoid_physics_generator/rot_limits"
+const ROT_LIMITS_SYMMETRY_KEY := "plugins/humanoid_physics_generator/rot_limits_symmetry"
 
 const TORSO_BONES := [
 	"Hips",
@@ -65,8 +69,6 @@ const TORSO_BONES := [
 static func generate_for_skeleton(skeleton: Skeleton3D, parent: Node3D) -> void:
 	if skeleton == null:
 		return
-
-	_cleanup_previous(skeleton)
 
 	var humanoid_bone_indices: Dictionary = {}
 	for bone_name in HUMANOID_BONES:
@@ -84,17 +86,23 @@ static func generate_for_skeleton(skeleton: Skeleton3D, parent: Node3D) -> void:
 	var bone_aabbs := _build_bone_aabbs_in_skeleton_space(skeleton, mesh_instances)
 	var use_symmetric := _is_symmetric_shapes_enabled()
 	var shared_shapes: Dictionary = {}
+	var existing_pbs := _get_existing_physical_bones_by_name(parent)
 
 	for bone_name in HUMANOID_BONES:
 		if _is_finger_or_toe_name(bone_name):
 			continue
 		if not humanoid_bone_indices.has(bone_name):
 			continue
+		if existing_pbs.has(bone_name):
+			_apply_6dof_constraints(existing_pbs[bone_name], bone_name, skeleton, humanoid_bone_indices[bone_name])
+			continue
 		var override_shape: Shape3D = null
 		if use_symmetric and bone_name.begins_with("Right"):
 			var left_name := _mirror_bone_name(bone_name)
 			if shared_shapes.has(left_name):
 				override_shape = shared_shapes[left_name]
+			elif existing_pbs.has(left_name):
+				override_shape = _get_physical_bone_shape(existing_pbs[left_name])
 
 		var shape_used := _create_physical_bone_and_collider(
 			skeleton,
@@ -104,8 +112,13 @@ static func generate_for_skeleton(skeleton: Skeleton3D, parent: Node3D) -> void:
 			bone_aabbs,
 			override_shape
 		)
+		var created_pb := _get_physical_bone_by_name(parent, bone_name)
+		if created_pb != null:
+			_apply_6dof_constraints(created_pb, bone_name, skeleton, humanoid_bone_indices[bone_name])
 		if use_symmetric and bone_name.begins_with("Left") and shape_used != null:
 			shared_shapes[bone_name] = shape_used
+
+	_ensure_ignore_adjacent_node(parent)
 
 static func _cleanup_previous(skeleton: Skeleton3D) -> void:
 	for child in skeleton.get_children():
@@ -130,6 +143,467 @@ static func _mirror_bone_name(bone_name: String) -> String:
 	if bone_name.begins_with("Left"):
 		return bone_name.replace("Left", "Right")
 	return bone_name
+
+static func _get_existing_physical_bones_by_name(parent: Node) -> Dictionary:
+	var result: Dictionary = {}
+	for child in parent.get_children():
+		if child is PhysicalBone3D:
+			var pb: PhysicalBone3D = child
+			var bone_name := _get_physical_bone_name(pb)
+			if bone_name != "":
+				result[bone_name] = pb
+	return result
+
+static func _get_physical_bone_by_name(parent: Node, bone_name: String) -> PhysicalBone3D:
+	for child in parent.get_children():
+		if child is PhysicalBone3D:
+			var pb: PhysicalBone3D = child
+			if _get_physical_bone_name(pb) == bone_name:
+				return pb
+	return null
+
+static func _get_physical_bone_name(pb: PhysicalBone3D) -> String:
+	if pb.has_method("get_bone_name"):
+		return str(pb.get_bone_name())
+	if pb.has_method("get"):
+		return str(pb.get("bone_name"))
+	return ""
+
+static func _get_physical_bone_shape(pb: PhysicalBone3D) -> Shape3D:
+	for child in pb.get_children():
+		if child is CollisionShape3D:
+			var cs: CollisionShape3D = child
+			return cs.shape
+	return null
+
+static func _ensure_ignore_adjacent_node(parent: Node3D) -> void:
+	var script := load(IGNORE_SCRIPT_PATH)
+	if script == null:
+		return
+	for child in parent.get_children():
+		if child.get_script() == script:
+			return
+	var node := Node.new()
+	node.name = "HumanoidPhysicsIgnoreAdjacent"
+	node.set_script(script)
+	parent.add_child(node)
+	node.owner = parent.owner
+
+static func _apply_6dof_constraints(pb: PhysicalBone3D, bone_name: String, skeleton: Skeleton3D, bone_idx: int) -> void:
+	if pb == null:
+		return
+	_set_joint_type_6dof(pb)
+	#_set_joint_frame_to_bone_axis(pb, skeleton, bone_name, bone_idx)
+	_set_joint_linear_limits_locked(pb)
+	var limits := _get_axis_limits_from_settings(bone_name)
+	_set_joint_angular_limits_axis_deg(
+		pb,
+		float(limits["x_lower"]),
+		float(limits["x_upper"]),
+		float(limits["y_lower"]),
+		float(limits["y_upper"]),
+		float(limits["z_lower"]),
+		float(limits["z_upper"]),
+		bool(limits["enabled"])
+	)
+	_set_joint_limit_softness(pb, "x", float(limits["x_softness"]))
+	_set_joint_limit_softness(pb, "y", float(limits["y_softness"]))
+	_set_joint_limit_softness(pb, "z", float(limits["z_softness"]))
+	_set_joint_damping(pb, float(limits["linear_damp"]), float(limits["angular_damp"]))
+
+static func _set_joint_type_6dof(pb: PhysicalBone3D) -> void:
+	if pb.has_method("set_joint_type"):
+		pb.set_joint_type(PhysicalBone3D.JOINT_TYPE_6DOF)
+	else:
+		_set_if_exists(pb, "joint_type", PhysicalBone3D.JOINT_TYPE_6DOF)
+
+static func _set_joint_linear_limits_locked(pb: PhysicalBone3D) -> void:
+	_set_if_exists(pb, "joint_constraints/x/linear_limit_lower", 0.0)
+	_set_if_exists(pb, "joint_constraints/x/linear_limit_upper", 0.0)
+	_set_if_exists(pb, "joint_constraints/y/linear_limit_lower", 0.0)
+	_set_if_exists(pb, "joint_constraints/y/linear_limit_upper", 0.0)
+	_set_if_exists(pb, "joint_constraints/z/linear_limit_lower", 0.0)
+	_set_if_exists(pb, "joint_constraints/z/linear_limit_upper", 0.0)
+		
+	_set_if_exists(pb, "joint_constraints/x/linear_limit_enabled", true)
+	_set_if_exists(pb, "joint_constraints/y/linear_limit_enabled", true)
+	_set_if_exists(pb, "joint_constraints/z/linear_limit_enabled", true)
+
+static func _set_joint_angular_limits_axis_deg(
+	pb: PhysicalBone3D,
+	x_lower_deg: float,
+	x_upper_deg: float,
+	y_lower_deg: float,
+	y_upper_deg: float,
+	z_lower_deg: float,
+	z_upper_deg: float,
+	enabled: bool
+) -> void:
+	if not enabled:
+		_set_joint_limit_axis(pb, "x", 0.0, 0.0, false)
+		_set_joint_limit_axis(pb, "y", 0.0, 0.0, false)
+		_set_joint_limit_axis(pb, "z", 0.0, 0.0, false)
+		return
+
+	_set_joint_limit_axis(pb, "x", x_lower_deg, x_upper_deg, true)
+	_set_joint_limit_axis(pb, "y", y_lower_deg, y_upper_deg, true)
+	_set_joint_limit_axis(pb, "z", z_lower_deg, z_upper_deg, true)
+
+static func _set_joint_damping(pb: PhysicalBone3D, linear_damp: float, angular_damp: float) -> void:
+	_set_if_exists(pb, "joint_constraints/x/linear_damping", linear_damp)
+	_set_if_exists(pb, "joint_constraints/x/angular_damping", angular_damp)
+	_set_if_exists(pb, "joint_constraints/y/linear_damping", linear_damp)
+	_set_if_exists(pb, "joint_constraints/y/angular_damping", angular_damp)
+	_set_if_exists(pb, "joint_constraints/z/linear_damping", linear_damp)
+	_set_if_exists(pb, "joint_constraints/z/angular_damping", angular_damp)
+
+static func _set_joint_limit_softness(pb: PhysicalBone3D, axis: String, softness: float) -> void:
+	var base := "joint_constraints/%s" % axis
+	_set_if_exists(pb, "%s/angular_limit_softness" % base, softness)
+
+static func _set_joint_limit_axis(pb: PhysicalBone3D, axis: String, lower: float, upper: float, enabled: bool) -> void:
+	var base := "joint_constraints/%s" % axis
+	_set_if_exists(pb, "%s/angular_limit_enabled" % base, enabled)
+	_set_if_exists(pb, "%s/angular_limit_lower" % base, lower)
+	_set_if_exists(pb, "%s/angular_limit_upper" % base, upper)
+
+static func _get_axis_limits_from_settings(bone_name: String) -> Dictionary:
+	var defaults := get_default_rotation_limits()
+	var use_name := bone_name
+	var mirror := false
+	var sym := _get_rot_limits_symmetry_mode()
+	if sym == 1 and bone_name.begins_with("Right"):
+		use_name = _mirror_bone_name(bone_name)
+		mirror = true
+	elif sym == 2 and bone_name.begins_with("Left"):
+		use_name = _mirror_bone_name(bone_name)
+		mirror = true
+
+	var d: Dictionary = defaults.get(use_name, defaults.get(bone_name, {}))
+
+	var enabled: bool = bool(_get_setting_or_default("%s/%s/enabled" % [ROT_LIMITS_PREFIX, use_name], d["enabled"]))
+	var x_lower: float = float(_get_setting_or_default("%s/%s/x_lower" % [ROT_LIMITS_PREFIX, use_name], d["x_lower"]))
+	var x_upper: float = float(_get_setting_or_default("%s/%s/x_upper" % [ROT_LIMITS_PREFIX, use_name], d["x_upper"]))
+	var y_lower: float = float(_get_setting_or_default("%s/%s/y_lower" % [ROT_LIMITS_PREFIX, use_name], d["y_lower"]))
+	var y_upper: float = float(_get_setting_or_default("%s/%s/y_upper" % [ROT_LIMITS_PREFIX, use_name], d["y_upper"]))
+	var z_lower: float = float(_get_setting_or_default("%s/%s/z_lower" % [ROT_LIMITS_PREFIX, use_name], d["z_lower"]))
+	var z_upper: float = float(_get_setting_or_default("%s/%s/z_upper" % [ROT_LIMITS_PREFIX, use_name], d["z_upper"]))
+	var x_softness: float = float(_get_setting_or_default("%s/%s/x_softness" % [ROT_LIMITS_PREFIX, use_name], d["x_softness"]))
+	var y_softness: float = float(_get_setting_or_default("%s/%s/y_softness" % [ROT_LIMITS_PREFIX, use_name], d["y_softness"]))
+	var z_softness: float = float(_get_setting_or_default("%s/%s/z_softness" % [ROT_LIMITS_PREFIX, use_name], d["z_softness"]))
+	var linear_damp: float = float(_get_setting_or_default("%s/%s/linear_damp" % [ROT_LIMITS_PREFIX, use_name], d["linear_damp"]))
+	var angular_damp: float = float(_get_setting_or_default("%s/%s/angular_damp" % [ROT_LIMITS_PREFIX, use_name], d["angular_damp"]))
+
+	if mirror:
+		var m := _mirror_limits(x_lower, x_upper, y_lower, y_upper, z_lower, z_upper)
+		x_lower = m["x_lower"]
+		x_upper = m["x_upper"]
+		y_lower = m["y_lower"]
+		y_upper = m["y_upper"]
+		z_lower = m["z_lower"]
+		z_upper = m["z_upper"]
+
+	return {
+		"enabled": enabled,
+		"x_lower": x_lower,
+		"x_upper": x_upper,
+		"y_lower": y_lower,
+		"y_upper": y_upper,
+		"z_lower": z_lower,
+		"z_upper": z_upper,
+		"x_softness": x_softness,
+		"y_softness": y_softness,
+		"z_softness": z_softness,
+		"linear_damp": linear_damp,
+		"angular_damp": angular_damp
+	}
+
+static func _mirror_limits(x_lower: float, x_upper: float, y_lower: float, y_upper: float, z_lower: float, z_upper: float) -> Dictionary:
+	return {
+		"x_lower": x_lower,
+		"x_upper": x_upper,
+		"y_lower": -y_upper,
+		"y_upper": -y_lower,
+		"z_lower": -z_upper,
+		"z_upper": -z_lower
+	}
+
+static func _get_rot_limits_symmetry_mode() -> int:
+	if ProjectSettings.has_setting(ROT_LIMITS_SYMMETRY_KEY):
+		return int(ProjectSettings.get_setting(ROT_LIMITS_SYMMETRY_KEY))
+	return 0
+
+static func _get_setting_or_default(key: String, default_value):
+	if ProjectSettings.has_setting(key):
+		return ProjectSettings.get_setting(key)
+	return default_value
+
+static func get_default_rotation_limits() -> Dictionary:
+	var base: Dictionary = {
+		"Hips": {
+			"x_lower": -180.0, "x_upper": 180.0,
+			"y_lower": -180.0, "y_upper": 180.0,
+			"z_lower": -180.0, "z_upper": 180.0,
+			"x_softness": 0.5, "y_softness": 0.5, "z_softness": 0.5,
+			"linear_damp": 0.01, "angular_damp": 0.0, "enabled": false
+		},
+		"Spine": {
+			"x_lower": -60.0, "x_upper": 15.0,
+			"y_lower": -15.0, "y_upper": 15.0,
+			"z_lower": -15.0, "z_upper": 15.0,
+			"x_softness": 0.5, "y_softness": 0.5, "z_softness": 0.5,
+			"linear_damp": 0.1, "angular_damp": 0.2, "enabled": true
+		},
+		"Chest": {
+			"x_lower": -30.0, "x_upper": 15.0,
+			"y_lower": -15.0, "y_upper": 15.0,
+			"z_lower": -15.0, "z_upper": 15.0,
+			"x_softness": 0.5, "y_softness": 0.5, "z_softness": 0.5,
+			"linear_damp": 0.1, "angular_damp": 0.2, "enabled": true
+		},
+		"UpperChest": {
+			"x_lower": -30.0, "x_upper": 15.0,
+			"y_lower": -15.0, "y_upper": 15.0,
+			"z_lower": -15.0, "z_upper": 15.0,
+			"x_softness": 0.5, "y_softness": 0.5, "z_softness": 0.5,
+			"linear_damp": 0.1, "angular_damp": 0.2, "enabled": true
+		},
+		"Neck": {
+			"x_lower": -20.0, "x_upper": 20.0,
+			"y_lower": -30.0, "y_upper": 30.0,
+			"z_lower": -30.0, "z_upper": 30.0,
+			"x_softness": 0.8, "y_softness": 0.8, "z_softness": 0.8,
+			"linear_damp": 0.1, "angular_damp": 0.5, "enabled": true
+		},
+		"Head": {
+			"x_lower": -20.0, "x_upper": 20.0,
+			"y_lower": -30.0, "y_upper": 30.0,
+			"z_lower": -30.0, "z_upper": 30.0,
+			"x_softness": 0.8, "y_softness": 0.8, "z_softness": 0.8,
+			"linear_damp": 0.1, "angular_damp": 0.5, "enabled": true
+		},
+		"Shoulder": {
+			"x_lower": -45.0, "x_upper": 45.0,
+			"y_lower": -80.0, "y_upper": 80.0,
+			"z_lower": -45.0, "z_upper": 45.0,
+			"x_softness": 0.8, "y_softness": 0.8, "z_softness": 0.8,
+			"linear_damp": 0.1, "angular_damp": 0.1, "enabled": true
+		},
+		"UpperArm": {
+			"x_lower": -45.0, "x_upper": 45.0,
+			"y_lower": -80.0, "y_upper": 80.0,
+			"z_lower": -45.0, "z_upper": 45.0,
+			"x_softness": 0.8, "y_softness": 0.8, "z_softness": 0.8,
+			"linear_damp": 0.1, "angular_damp": 0.1, "enabled": true
+		},
+		"LowerArm": {
+			"x_lower": -120.0, "x_upper": 10.0,
+			"y_lower": -45.0, "y_upper": 45.0,
+			"z_lower": 0.0, "z_upper": 0.0,
+			"x_softness": 0.9, "y_softness": 0.9, "z_softness": 0.9,
+			"linear_damp": 0.1, "angular_damp": 0.1, "enabled": true
+		},
+		"Hand": {
+			"x_lower": -15.0, "x_upper": 15.0,
+			"y_lower": -20.0, "y_upper": 20.0,
+			"z_lower": -20.0, "z_upper": 20.0,
+			"x_softness": 0.8, "y_softness": 0.8, "z_softness": 0.8,
+			"linear_damp": 0.0, "angular_damp": 0.0, "enabled": true
+		},
+		"UpperLeg": {
+			"x_lower": -20.0, "x_upper": 90.0,
+			"y_lower": -20.0, "y_upper": 20.0,
+			"z_lower": -20.0, "z_upper": 20.0,
+			"x_softness": 0.8, "y_softness": 0.8, "z_softness": 0.8,
+			"linear_damp": 0.1, "angular_damp": 0.1, "enabled": true
+		},
+		"LowerLeg": {
+			"x_lower": -120.0, "x_upper": 10.0,
+			"y_lower": 0.0, "y_upper": 0.0,
+			"z_lower": 0.0, "z_upper": 0.0,
+			"x_softness": 0.9, "y_softness": 0.9, "z_softness": 0.9,
+			"linear_damp": 0.1, "angular_damp": 0.1, "enabled": true
+		},
+		"Foot": {
+			"x_lower": -30.0, "x_upper": 30.0,
+			"y_lower": -15.0, "y_upper": 15.0,
+			"z_lower": -15.0, "z_upper": 15.0,
+			"x_softness": 0.8, "y_softness": 0.8, "z_softness": 0.8,
+			"linear_damp": 0.0, "angular_damp": 0.0, "enabled": true
+		},
+		"Toes": {
+			"x_lower": 0.0, "x_upper": 0.0,
+			"y_lower": -20.0, "y_upper": 20.0,
+			"z_lower": 0.0, "z_upper": 0.0,
+			"x_softness": 0.8, "y_softness": 0.8, "z_softness": 0.8,
+			"linear_damp": 0.0, "angular_damp": 0.0, "enabled": true
+		}
+	}
+
+	var result: Dictionary = {}
+	for bone_name in HUMANOID_BONES:
+		var base_name: String = bone_name
+		if base_name.begins_with("Left"):
+			base_name = base_name.substr(4)
+		elif base_name.begins_with("Right"):
+			base_name = base_name.substr(5)
+		if base.has(base_name):
+			result[bone_name] = base[base_name]
+		else:
+			result[bone_name] = base["Spine"]
+	return result
+
+static func _set_body_offset(pb: PhysicalBone3D, offset: Transform3D) -> void:
+	if pb.has_method("set_body_offset"):
+		pb.set_body_offset(offset)
+	else:
+		_set_if_exists(pb, "body_offset", offset)
+
+static func _set_joint_frame_to_bone_axis(pb: PhysicalBone3D, skeleton: Skeleton3D, bone_name: String, bone_idx: int) -> void:
+	var dir_local := _get_reference_dir_local(skeleton, bone_name, bone_idx)
+	if dir_local.length() <= 0.0001:
+		return
+	var basis := _basis_from_x_dir(dir_local.normalized())
+	var offset := Transform3D(basis, Vector3.ZERO)
+	_set_if_exists(pb, "body_offset", offset)
+
+static func _get_reference_dir_local(skeleton: Skeleton3D, bone_name: String, bone_idx: int) -> Vector3:
+	var next_idx := _get_next_chain_bone_index(skeleton, bone_name)
+	var bone_pose := skeleton.get_bone_global_pose(bone_idx)
+	if next_idx != -1:
+		var next_pose := skeleton.get_bone_global_pose(next_idx)
+		var dir := next_pose.origin - bone_pose.origin
+		return bone_pose.affine_inverse().basis * dir
+	if skeleton.has_method("get_bone_children"):
+		var children: PackedInt32Array = skeleton.get_bone_children(bone_idx)
+		if children.size() > 0:
+			var child_pose := skeleton.get_bone_global_pose(children[0])
+			var dir2 := child_pose.origin - bone_pose.origin
+			return bone_pose.affine_inverse().basis * dir2
+	return Vector3.RIGHT
+
+static func _basis_from_x_dir(x_dir: Vector3) -> Basis:
+	var x := x_dir.normalized()
+	var up := Vector3.UP
+	if abs(x.dot(up)) > 0.98:
+		up = Vector3.FORWARD
+	var y := (up - x * up.dot(x)).normalized()
+	var z := x.cross(y).normalized()
+	return Basis(x, y, z)
+
+static func _get_ue_limits_for_bone(bone_name: String) -> Dictionary:
+	var base := bone_name
+	if base.begins_with("Left"):
+		base = base.substr(4)
+	elif base.begins_with("Right"):
+		base = base.substr(5)
+
+	var twist_deg := 20.0
+	var swing1_deg := 20.0
+	var swing2_deg := 20.0
+	var enabled := true
+	var linear_damp := 0.1
+	var angular_damp := 0.1
+	var one_sided := false
+	var one_sided_deg := 0.0
+	match base:
+		"Hips":
+			enabled = false
+			linear_damp = 0.01
+			angular_damp = 0.0
+			twist_deg = 180.0
+			swing1_deg = 180.0
+			swing2_deg = 180.0
+		"Spine", "Chest", "UpperChest":
+			twist_deg = 15.0
+			swing1_deg = 15.0
+			swing2_deg = 15.0
+			linear_damp = 0.1
+			angular_damp = 0.2
+		"Neck", "Head":
+			twist_deg = 20.0
+			swing1_deg = 30.0
+			swing2_deg = 30.0
+			linear_damp = 0.1
+			angular_damp = 0.5
+		"Shoulder":
+			twist_deg = 45.0
+			swing1_deg = 45.0
+			swing2_deg = 80.0
+			linear_damp = 0.5
+			angular_damp = 0.5
+		"UpperArm":
+			twist_deg = 45.0
+			swing1_deg = 70.0
+			swing2_deg = 70.0
+			linear_damp = 0.1
+			angular_damp = 0.1
+		"LowerArm":
+			twist_deg = 10.0
+			swing1_deg = 120.0
+			swing2_deg = 0.0
+			linear_damp = 0.1
+			angular_damp = 0.1
+		"Hand":
+			twist_deg = 15.0
+			swing1_deg = 20.0
+			swing2_deg = 20.0
+			linear_damp = 0.0
+			angular_damp = 0.0
+		"UpperLeg":
+			twist_deg = 20.0
+			swing1_deg = 65.0
+			swing2_deg = 65.0
+			linear_damp = 0.1
+			angular_damp = 0.1
+		"LowerLeg":
+			twist_deg = 10.0
+			swing1_deg = 0.0
+			swing2_deg = 0.0
+			linear_damp = 0.1
+			angular_damp = 0.1
+		"Foot":
+			twist_deg = 10.0
+			swing1_deg = 15.0
+			swing2_deg = 15.0
+			linear_damp = 0.0
+			angular_damp = 0.0
+		"Toes", "Toe", "Ball":
+			twist_deg = 0.0
+			swing1_deg = 20.0
+			swing2_deg = 0.0
+			linear_damp = 0.0
+			angular_damp = 0.0
+
+	# Optional one-sided hinge for knees/elbows (Swing1 only)
+	if base == "LowerLeg" or base == "LowerArm":
+		if swing1_deg > 0.0 and swing2_deg == 0.0:
+			one_sided = true
+			one_sided_deg = swing1_deg
+	if base == "LowerArm":
+		one_sided = false
+		one_sided_deg = 0.0
+
+	return {
+		"twist_deg": twist_deg,
+		"swing1_deg": swing1_deg,
+		"swing2_deg": swing2_deg,
+		"enabled": enabled,
+		"linear_damp": linear_damp,
+		"angular_damp": angular_damp,
+		"one_sided": one_sided,
+		"one_sided_deg": one_sided_deg
+	}
+
+static func _has_property(obj: Object, property_name: String) -> bool:
+	for p in obj.get_property_list():
+		if p.name == property_name:
+			return true
+	return false
+
+static func _set_if_exists(obj: Object, property_name: String, value) -> void:
+	if _has_property(obj, property_name):
+		obj.set(property_name, value)
 
 static func _find_mesh_instances_using_skeleton(skeleton: Skeleton3D) -> Array:
 	var result: Array = []
@@ -251,7 +725,8 @@ static func _create_sphere_collider_for_bone(pb: PhysicalBone3D, skeleton: Skele
 	var collider := pb.get_child(0)
 	if override_shape != null:
 		collider.shape = override_shape
-		collider.transform = Transform3D(Basis(), center)
+		_set_body_offset(pb, Transform3D(Basis(), center))
+		collider.transform = Transform3D.IDENTITY
 		return override_shape
 
 	var radius := local_aabb.size.length() * 0.5
@@ -259,7 +734,8 @@ static func _create_sphere_collider_for_bone(pb: PhysicalBone3D, skeleton: Skele
 	shape.radius = max(radius, 0.01)
 	
 	collider.shape = shape
-	collider.transform = Transform3D(Basis(), center)
+	_set_body_offset(pb, Transform3D(Basis(), center))
+	collider.transform = Transform3D.IDENTITY
 	return shape
 
 static func _create_foot_capsule(pb: PhysicalBone3D, skeleton: Skeleton3D, bone_idx: int, bone_aabbs: Dictionary, override_shape: Shape3D) -> Shape3D:
@@ -272,7 +748,8 @@ static func _create_foot_capsule(pb: PhysicalBone3D, skeleton: Skeleton3D, bone_
 	var collider := pb.get_child(0)
 	if override_shape != null:
 		collider.shape = override_shape
-		collider.transform = Transform3D(Basis(), center)
+		_set_body_offset(pb, Transform3D(Basis(), center))
+		collider.transform = Transform3D.IDENTITY
 		return override_shape
 
 	var radius: float = max(size.x, size.z) * 0.5
@@ -283,7 +760,8 @@ static func _create_foot_capsule(pb: PhysicalBone3D, skeleton: Skeleton3D, bone_
 	shape.height = height
 
 	collider.shape = shape
-	collider.transform = Transform3D(Basis(), center)
+	_set_body_offset(pb, Transform3D(Basis(), center))
+	collider.transform = Transform3D.IDENTITY
 	return shape
 
 static func _create_chain_capsule(pb: PhysicalBone3D, skeleton: Skeleton3D, bone_name: String, bone_idx: int, bone_aabbs: Dictionary, override_shape: Shape3D) -> Shape3D:
@@ -352,7 +830,8 @@ static func _create_chain_capsule(pb: PhysicalBone3D, skeleton: Skeleton3D, bone
 	if override_shape != null:
 		collider.shape = override_shape
 		var basis := _basis_from_up_to_dir(axis_dir.normalized())
-		collider.transform = Transform3D(basis, center)
+		_set_body_offset(pb, Transform3D(Basis(), center))
+		collider.transform = Transform3D(basis, Vector3.ZERO)
 		return override_shape
 
 	var shape := CapsuleShape3D.new()
@@ -361,7 +840,8 @@ static func _create_chain_capsule(pb: PhysicalBone3D, skeleton: Skeleton3D, bone
 
 	var basis := _basis_from_up_to_dir(axis_dir.normalized())
 	collider.shape = shape
-	collider.transform = Transform3D(basis, center)
+	_set_body_offset(pb, Transform3D(Basis(), center))
+	collider.transform = Transform3D(basis, Vector3.ZERO)
 	return shape
 
 static func _get_next_chain_bone_index(skeleton: Skeleton3D, bone_name: String) -> int:

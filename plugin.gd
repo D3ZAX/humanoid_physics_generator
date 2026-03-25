@@ -5,6 +5,7 @@ const Generator := preload("res://addons/humanoid_physics_generator/humanoid_phy
 
 func _enter_tree() -> void:
 	_ensure_project_setting()
+	_ensure_rotation_limit_settings()
 	add_tool_menu_item("Generate Humanoid Physics", _on_generate_pressed)
 
 func _exit_tree() -> void:
@@ -23,6 +24,39 @@ func _ensure_project_setting() -> void:
 	})
 	ProjectSettings.set_as_basic(key, true)
 	ProjectSettings.set_initial_value(key, true)
+
+func _ensure_rotation_limit_settings() -> void:
+	var defaults: Dictionary = Generator.get_default_rotation_limits()
+	for bone_name in defaults.keys():
+		var d: Dictionary = defaults[bone_name]
+		_ensure_setting("%s/%s/enabled" % [Generator.ROT_LIMITS_PREFIX, bone_name], d["enabled"], TYPE_BOOL)
+		_ensure_setting("%s/%s/x_lower" % [Generator.ROT_LIMITS_PREFIX, bone_name], d["x_lower"], TYPE_FLOAT)
+		_ensure_setting("%s/%s/x_upper" % [Generator.ROT_LIMITS_PREFIX, bone_name], d["x_upper"], TYPE_FLOAT)
+		_ensure_setting("%s/%s/y_lower" % [Generator.ROT_LIMITS_PREFIX, bone_name], d["y_lower"], TYPE_FLOAT)
+		_ensure_setting("%s/%s/y_upper" % [Generator.ROT_LIMITS_PREFIX, bone_name], d["y_upper"], TYPE_FLOAT)
+		_ensure_setting("%s/%s/z_lower" % [Generator.ROT_LIMITS_PREFIX, bone_name], d["z_lower"], TYPE_FLOAT)
+		_ensure_setting("%s/%s/z_upper" % [Generator.ROT_LIMITS_PREFIX, bone_name], d["z_upper"], TYPE_FLOAT)
+		_ensure_setting("%s/%s/x_softness" % [Generator.ROT_LIMITS_PREFIX, bone_name], d["x_softness"], TYPE_FLOAT)
+		_ensure_setting("%s/%s/y_softness" % [Generator.ROT_LIMITS_PREFIX, bone_name], d["y_softness"], TYPE_FLOAT)
+		_ensure_setting("%s/%s/z_softness" % [Generator.ROT_LIMITS_PREFIX, bone_name], d["z_softness"], TYPE_FLOAT)
+		_ensure_setting("%s/%s/linear_damp" % [Generator.ROT_LIMITS_PREFIX, bone_name], d["linear_damp"], TYPE_FLOAT)
+		_ensure_setting("%s/%s/angular_damp" % [Generator.ROT_LIMITS_PREFIX, bone_name], d["angular_damp"], TYPE_FLOAT)
+
+	var sym_key := Generator.ROT_LIMITS_SYMMETRY_KEY
+	_ensure_setting(sym_key, 0, TYPE_INT, PROPERTY_HINT_ENUM, "None,RightFromLeft,LeftFromRight")
+	ProjectSettings.set_as_basic(sym_key, true)
+	ProjectSettings.set_initial_value(sym_key, 1)
+
+func _ensure_setting(path: String, value, type: int, hint: int = PROPERTY_HINT_NONE, hint_string: String = "") -> void:
+	if not ProjectSettings.has_setting(path):
+		ProjectSettings.set_setting(path, value)
+	ProjectSettings.add_property_info({
+		"name": path,
+		"type": type,
+		"hint": hint,
+		"hint_string": hint_string,
+		"usage": PROPERTY_USAGE_DEFAULT
+	})
 
 func _on_generate_pressed() -> void:
 	var editor_selection := get_editor_interface().get_selection()
