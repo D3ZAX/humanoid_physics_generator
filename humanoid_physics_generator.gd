@@ -330,10 +330,10 @@ static func _mirror_limits(x_lower: float, x_upper: float, y_lower: float, y_upp
 	return {
 		"x_lower": x_lower,
 		"x_upper": x_upper,
-		"y_lower": -y_upper,
-		"y_upper": -y_lower,
-		"z_lower": -z_upper,
-		"z_upper": -z_lower
+		"y_lower": y_lower,
+		"y_upper": y_upper,
+		"z_lower": z_lower,
+		"z_upper": z_upper
 	}
 
 static func _get_rot_limits_symmetry_mode() -> int:
@@ -391,16 +391,16 @@ static func get_default_rotation_limits() -> Dictionary:
 			"linear_damp": 0.1, "angular_damp": 0.5, "enabled": true
 		},
 		"Shoulder": {
-			"x_lower": -45.0, "x_upper": 45.0,
-			"y_lower": -80.0, "y_upper": 80.0,
-			"z_lower": -45.0, "z_upper": 45.0,
+			"x_lower": -45.0, "x_upper": 15.0,
+			"y_lower": 10.0, "y_upper": 10.0,
+			"z_lower": -75.0, "z_upper": 10.0,
 			"x_softness": 0.8, "y_softness": 0.8, "z_softness": 0.8,
 			"linear_damp": 0.1, "angular_damp": 0.1, "enabled": true
 		},
 		"UpperArm": {
-			"x_lower": -45.0, "x_upper": 45.0,
-			"y_lower": -80.0, "y_upper": 80.0,
-			"z_lower": -45.0, "z_upper": 45.0,
+			"x_lower": -80.0, "x_upper": 10.0,
+			"y_lower": -45.0, "y_upper": 45.0,
+			"z_lower": -10.0, "z_upper": 10.0,
 			"x_softness": 0.8, "y_softness": 0.8, "z_softness": 0.8,
 			"linear_damp": 0.1, "angular_damp": 0.1, "enabled": true
 		},
