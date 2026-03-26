@@ -107,6 +107,8 @@ func _get_adjacent_pairs(root: Node) -> Array:
 	# UpperChest branching
 	pairs.append(["UpperChest", "LeftShoulder"])
 	pairs.append(["UpperChest", "RightShoulder"])
+	pairs.append(["UpperChest", "LeftUpperArm"])
+	pairs.append(["UpperChest", "RightUpperArm"])
 
 	return _filter_existing_pairs(pairs)
 

@@ -32,9 +32,9 @@ func _ensure_rotation_limit_settings() -> void:
 	ProjectSettings.set_initial_value(sym_key, 1)
 
 	var damp_key := Generator.APPLY_DAMPING_SETTING_KEY
-	_ensure_setting(damp_key, false, TYPE_BOOL)
+	_ensure_setting(damp_key, true, TYPE_BOOL)
 	ProjectSettings.set_as_basic(damp_key, true)
-	ProjectSettings.set_initial_value(damp_key, false)
+	ProjectSettings.set_initial_value(damp_key, true)
 	
 	var defaults: Dictionary = Generator.get_default_rotation_limits()
 	for bone_name in defaults.keys():
@@ -78,7 +78,7 @@ func _on_generate_pressed() -> void:
 			parent = node
 			var ske = node.get_parent()
 			if ske is Skeleton3D:
-				skeleton = ske				
+				skeleton = ske
 			else:
 				push_warning("PhysicalBoneSimulator3D node must be a child of Skeleton3D node.")
 				return

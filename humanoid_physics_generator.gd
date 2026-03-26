@@ -212,9 +212,9 @@ static func _apply_6dof_constraints(pb: PhysicalBone3D, bone_name: String, skele
 		float(limits["z_upper"]),
 		bool(limits["enabled"])
 	)
-	_set_joint_limit_softness(pb, "x", float(limits["x_softness"]))
-	_set_joint_limit_softness(pb, "y", float(limits["y_softness"]))
-	_set_joint_limit_softness(pb, "z", float(limits["z_softness"]))
+	#_set_joint_limit_softness(pb, "x", float(limits["x_softness"]))
+	#_set_joint_limit_softness(pb, "y", float(limits["y_softness"]))
+	#_set_joint_limit_softness(pb, "z", float(limits["z_softness"]))
 	if _is_apply_damping_enabled():
 		_set_joint_damping(pb, float(limits["linear_damp"]), float(limits["angular_damp"]))
 
@@ -257,12 +257,14 @@ static func _set_joint_angular_limits_axis_deg(
 	_set_joint_limit_axis(pb, "z", z_lower_deg, z_upper_deg, true)
 
 static func _set_joint_damping(pb: PhysicalBone3D, linear_damp: float, angular_damp: float) -> void:
-	_set_if_exists(pb, "joint_constraints/x/linear_damping", linear_damp)
-	_set_if_exists(pb, "joint_constraints/x/angular_damping", angular_damp)
-	_set_if_exists(pb, "joint_constraints/y/linear_damping", linear_damp)
-	_set_if_exists(pb, "joint_constraints/y/angular_damping", angular_damp)
-	_set_if_exists(pb, "joint_constraints/z/linear_damping", linear_damp)
-	_set_if_exists(pb, "joint_constraints/z/angular_damping", angular_damp)
+	#_set_if_exists(pb, "joint_constraints/x/linear_damping", linear_damp)
+	#_set_if_exists(pb, "joint_constraints/x/angular_damping", angular_damp)
+	#_set_if_exists(pb, "joint_constraints/y/linear_damping", linear_damp)
+	#_set_if_exists(pb, "joint_constraints/y/angular_damping", angular_damp)
+	#_set_if_exists(pb, "joint_constraints/z/linear_damping", linear_damp)
+	#_set_if_exists(pb, "joint_constraints/z/angular_damping", angular_damp)
+	pb.angular_damp = angular_damp
+	pb.linear_damp = linear_damp
 
 static func _set_joint_limit_softness(pb: PhysicalBone3D, axis: String, softness: float) -> void:
 	var base := "joint_constraints/%s" % axis
@@ -347,6 +349,7 @@ static func _get_setting_or_default(key: String, default_value):
 	return default_value
 
 static func get_default_rotation_limits() -> Dictionary:
+	#TPose Rotation Angle
 	var base: Dictionary = {
 		"Hips": {
 			"x_lower": -180.0, "x_upper": 180.0,
@@ -356,21 +359,21 @@ static func get_default_rotation_limits() -> Dictionary:
 			"linear_damp": 0.01, "angular_damp": 0.0, "enabled": false
 		},
 		"Spine": {
-			"x_lower": -30.0, "x_upper": 15.0,
+			"x_lower": -30.0, "x_upper": 15.0,#x_lower: front, x_upper: back
 			"y_lower": -15.0, "y_upper": 15.0,
 			"z_lower": -15.0, "z_upper": 15.0,
 			"x_softness": 0.5, "y_softness": 0.5, "z_softness": 0.5,
 			"linear_damp": 0.1, "angular_damp": 0.2, "enabled": true
 		},
 		"Chest": {
-			"x_lower": -30.0, "x_upper": 15.0,
+			"x_lower": -30.0, "x_upper": 15.0,#x_lower: front, x_upper: back
 			"y_lower": -15.0, "y_upper": 15.0,
 			"z_lower": -15.0, "z_upper": 15.0,
 			"x_softness": 0.5, "y_softness": 0.5, "z_softness": 0.5,
 			"linear_damp": 0.1, "angular_damp": 0.2, "enabled": true
 		},
 		"UpperChest": {
-			"x_lower": -30.0, "x_upper": 15.0,
+			"x_lower": -30.0, "x_upper": 15.0,#x_lower: front, x_upper: back
 			"y_lower": -15.0, "y_upper": 15.0,
 			"z_lower": -15.0, "z_upper": 15.0,
 			"x_softness": 0.5, "y_softness": 0.5, "z_softness": 0.5,
@@ -391,21 +394,21 @@ static func get_default_rotation_limits() -> Dictionary:
 			"linear_damp": 0.1, "angular_damp": 0.5, "enabled": true
 		},
 		"Shoulder": {
-			"x_lower": -45.0, "x_upper": 15.0,
-			"y_lower": 10.0, "y_upper": 10.0,
-			"z_lower": -75.0, "z_upper": 10.0,
+			"x_lower": -45.0, "x_upper": 15.0,#x_lower: up, x_upper: down
+			"y_lower": -60.0, "y_upper": 0.0,
+			"z_lower": -60.0, "z_upper": 10.0,#z_lower: front, z_upper: back
 			"x_softness": 0.8, "y_softness": 0.8, "z_softness": 0.8,
 			"linear_damp": 0.1, "angular_damp": 0.1, "enabled": true
 		},
 		"UpperArm": {
-			"x_lower": -80.0, "x_upper": 10.0,
-			"y_lower": -45.0, "y_upper": 45.0,
-			"z_lower": -10.0, "z_upper": 10.0,
+			"x_lower": -80.0, "x_upper": 10.0,#x_lower: down, x_upper: up
+			"y_lower": -15.0, "y_upper": 15.0,
+			"z_lower": -60.0, "z_upper": 5.0,#z_lower: front, z_upper: back
 			"x_softness": 0.8, "y_softness": 0.8, "z_softness": 0.8,
 			"linear_damp": 0.1, "angular_damp": 0.1, "enabled": true
 		},
 		"LowerArm": {
-			"x_lower": -120.0, "x_upper": 10.0,
+			"x_lower": -120.0, "x_upper": 10.0,#x_lower: front, x_upper: back
 			"y_lower": -45.0, "y_upper": 45.0,
 			"z_lower": 0.0, "z_upper": 0.0,
 			"x_softness": 0.9, "y_softness": 0.9, "z_softness": 0.9,
@@ -419,21 +422,21 @@ static func get_default_rotation_limits() -> Dictionary:
 			"linear_damp": 0.0, "angular_damp": 0.0, "enabled": true
 		},
 		"UpperLeg": {
-			"x_lower": -90.0, "x_upper": 20.0,
+			"x_lower": -90.0, "x_upper": 20.0,#x_lower: front, x_upper: back
 			"y_lower": -20.0, "y_upper": 20.0,
 			"z_lower": -20.0, "z_upper": 20.0,
 			"x_softness": 0.8, "y_softness": 0.8, "z_softness": 0.8,
 			"linear_damp": 0.1, "angular_damp": 0.1, "enabled": true
 		},
 		"LowerLeg": {
-			"x_lower": -120.0, "x_upper": 10.0,
+			"x_lower": -120.0, "x_upper": 10.0,#x_lower: back, x_upper: front
 			"y_lower": 0.0, "y_upper": 0.0,
 			"z_lower": 0.0, "z_upper": 0.0,
 			"x_softness": 0.9, "y_softness": 0.9, "z_softness": 0.9,
 			"linear_damp": 0.1, "angular_damp": 0.1, "enabled": true
 		},
 		"Foot": {
-			"x_lower": -30.0, "x_upper": 30.0,
+			"x_lower": -30.0, "x_upper": 30.0,#x_lower: front, x_upper: back
 			"y_lower": -15.0, "y_upper": 15.0,
 			"z_lower": -15.0, "z_upper": 15.0,
 			"x_softness": 0.8, "y_softness": 0.8, "z_softness": 0.8,
