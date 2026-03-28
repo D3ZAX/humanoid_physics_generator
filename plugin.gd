@@ -19,8 +19,7 @@ func _ensure_project_setting() -> void:
 		"name": key,
 		"type": TYPE_BOOL,
 		"hint": PROPERTY_HINT_NONE,
-		"hint_string": "",
-		"usage": PROPERTY_USAGE_DEFAULT
+		"hint_string": ""
 	})
 	ProjectSettings.set_as_basic(key, true)
 	ProjectSettings.set_initial_value(key, true)
@@ -59,8 +58,7 @@ func _ensure_setting(path: String, value, type: int, hint: int = PROPERTY_HINT_N
 		"name": path,
 		"type": type,
 		"hint": hint,
-		"hint_string": hint_string,
-		"usage": PROPERTY_USAGE_DEFAULT
+		"hint_string": hint_string
 	})
 	ProjectSettings.set_initial_value(path, value)
 
