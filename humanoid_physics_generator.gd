@@ -380,18 +380,18 @@ static func get_default_rotation_limits() -> Dictionary:
 			"linear_damp": 0.1, "angular_damp": 0.2, "enabled": true
 		},
 		"Neck": {
-			"x_lower": -20.0, "x_upper": 20.0,
-			"y_lower": -30.0, "y_upper": 30.0,
-			"z_lower": -30.0, "z_upper": 30.0,
+			"x_lower": -10.0, "x_upper": 10.0,
+			"y_lower": -15.0, "y_upper": 15.0,
+			"z_lower": -15.0, "z_upper": 15.0,
 			"x_softness": 0.8, "y_softness": 0.8, "z_softness": 0.8,
-			"linear_damp": 0.1, "angular_damp": 0.5, "enabled": true
+			"linear_damp": 0.1, "angular_damp": 10, "enabled": true
 		},
 		"Head": {
-			"x_lower": -20.0, "x_upper": 20.0,
-			"y_lower": -30.0, "y_upper": 30.0,
-			"z_lower": -30.0, "z_upper": 30.0,
+			"x_lower": -10.0, "x_upper": 10.0,
+			"y_lower": -15.0, "y_upper": 15.0,
+			"z_lower": -15.0, "z_upper": 15.0,
 			"x_softness": 0.8, "y_softness": 0.8, "z_softness": 0.8,
-			"linear_damp": 0.1, "angular_damp": 0.5, "enabled": true
+			"linear_damp": 0.1, "angular_damp": 10, "enabled": true
 		},
 		"Shoulder": {
 			"x_lower": -45.0, "x_upper": 15.0,#x_lower: up, x_upper: down
